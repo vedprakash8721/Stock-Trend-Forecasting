@@ -37,7 +37,7 @@ This guide assumes you have Python installed.
 
 1.  **Clone the Repository:**
     ```bash
-    git clone [https://github.com/vedprakash8721/Stock-Trend-Forecasting.git](https://github.com/vedprakash8721/Stock-Trend-Forecasting.git)
+    https://github.com/vedprakash8721/Stock-Trend-Forecasting
     ```
 
 2.  **Navigate to Project Directory:**
