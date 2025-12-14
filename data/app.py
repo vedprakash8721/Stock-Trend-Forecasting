@@ -11,10 +11,15 @@ import plotly.io as pio
 from sklearn.preprocessing import MinMaxScaler
 from keras.models import load_model
 
+# ---------------------------
+# Global config
+# ---------------------------
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
 
 st.set_page_config(page_title="Stock Predictor (LSTM)", layout="wide")
-pio.templates.default = "plotly_dark"
+
+# IMPORTANT: Fix hover & legend visibility
+pio.templates.default = "plotly_white"
 
 # ---------------------------
 # Sidebar
@@ -22,30 +27,34 @@ pio.templates.default = "plotly_dark"
 st.sidebar.title("⚙️ Configuration")
 
 stock = st.sidebar.text_input(
-    "Stock Ticker (e.g., AAPL, RELIANCE.NS)", "POWERGRID.NS"
+    "Use standard US stock tickers (e.g., AAPL for Apple, MSFT for Microsoft, GOOG for Google, AMZN for Amazon, TSLA for Tesla, NVDA for NVIDIA,META for Meta,NFLX for Netflix,KO for Coca-Cola, etc.)",
+    value="POWERGRID.NS"
 ).strip().upper()
 
 col_dates = st.sidebar.columns(2)
 with col_dates[0]:
-    start = st.date_input("Start Date", dt.date(2015, 1, 1))
+    start = st.date_input("Start Date", value=dt.date(2015, 1, 1))
 with col_dates[1]:
-    end = st.date_input("End Date", dt.date.today())
+    end = st.date_input("End Date", value=dt.date.today())
 
-seq_len = st.sidebar.number_input("Sequence Length", 20, 300, 100, 5)
+seq_len = st.sidebar.number_input("Sequence Length (days)", 20, 300, 100, 5)
 train_split = st.sidebar.slider("Train Split (%)", 50, 90, 70, 5)
-
-recent_days = st.sidebar.slider("Show recent days data", 5, 100, 30)
+recent_days = st.sidebar.slider("Recent days to show", 5, 100, 30)
 
 BASE_DIR = os.path.dirname(__file__)
 model_path = st.sidebar.text_input(
-    "Model Path (.h5)", os.path.join(BASE_DIR, "stock_dl_model.h5")
+    "Model Path (.h5)",
+    value=os.path.join(BASE_DIR, "stock_dl_model.h5")
 )
 uploaded_model = st.sidebar.file_uploader("Upload Keras Model (.h5)", type=["h5"])
 
 run_btn = st.sidebar.button("🚀 Run Inference")
 
+# ---------------------------
+# Title
+# ---------------------------
 st.title("📈 Stock Price Prediction — LSTM")
-st.caption("Market context + ML predictions + downloadable data")
+st.caption("Market context + ML predictions + downloadable datasets")
 
 # ---------------------------
 # Utilities
@@ -53,10 +62,10 @@ st.caption("Market context + ML predictions + downloadable data")
 @st.cache_resource(show_spinner=False)
 def load_keras_model(path_or_file):
     if hasattr(path_or_file, "read"):
-        tmp = os.path.join(BASE_DIR, "uploaded_model.h5")
-        with open(tmp, "wb") as f:
+        tmp_path = os.path.join(BASE_DIR, "uploaded_model.h5")
+        with open(tmp_path, "wb") as f:
             f.write(path_or_file.read())
-        return load_model(tmp)
+        return load_model(tmp_path)
     return load_model(path_or_file)
 
 @st.cache_data(show_spinner=False)
@@ -79,19 +88,19 @@ except Exception as e:
     st.sidebar.error(f"Model load failed: {e}")
 
 # ---------------------------
-# Run
+# Run app
 # ---------------------------
 if run_btn:
     df = fetch_data(stock, start, end)
 
     if df.empty:
-        st.error("No data returned.")
+        st.error("No data returned. Check ticker or date range.")
         st.stop()
 
     df = df.dropna().sort_index()
 
     # ===========================
-    # 📊 MARKET DATA (TEXT)
+    # Market data tables
     # ===========================
     st.subheader("📋 Recent Market Data (OHLCV)")
     recent_df = df.tail(recent_days)
@@ -104,12 +113,14 @@ if run_btn:
         mime="text/csv"
     )
 
-    st.subheader("📈 Descriptive Statistics (Close Price)")
+    st.subheader("📊 Descriptive Statistics (Close Price)")
     st.dataframe(df["Close"].describe().to_frame())
 
     # ===========================
-    # 📉 CANDLESTICK + EMAs
+    # Candlestick + EMA
     # ===========================
+    st.subheader("📉 Candlestick with EMAs")
+
     fig_candle = go.Figure()
     fig_candle.add_trace(go.Candlestick(
         x=df.index,
@@ -125,13 +136,18 @@ if run_btn:
             x=df.index,
             y=df["Close"].ewm(span=span).mean(),
             mode="lines",
-            name=f"EMA{span}"
+            name=f"EMA {span}"
         ))
+
+    fig_candle.update_layout(
+        height=520,
+        legend=dict(orientation="h", y=1.02)
+    )
 
     st.plotly_chart(fig_candle, use_container_width=True)
 
     # ===========================
-    # MODEL CHECK
+    # Model check
     # ===========================
     if model is None:
         st.warning("Model not loaded. Upload a .h5 model to run predictions.")
@@ -145,12 +161,13 @@ if run_btn:
         st.stop()
 
     # ===========================
-    # PREPARE DATA
+    # Prepare data
     # ===========================
     close = df["Close"]
-    split = int(len(close) * train_split / 100)
+    split_idx = int(len(close) * train_split / 100)
 
-    train, test = close[:split], close[split:]
+    train = close[:split_idx]
+    test = close[split_idx:]
 
     if len(test) < seq_len:
         st.error("Test data smaller than sequence length.")
@@ -171,25 +188,43 @@ if run_btn:
     y_test = np.array(y_test)
 
     # ===========================
-    # PREDICTION
+    # Prediction
     # ===========================
     y_pred = model.predict(x_test, verbose=0)
+
     y_pred = scaler.inverse_transform(y_pred)
     y_true = scaler.inverse_transform(y_test)
 
     dates = test.index[-len(y_true):]
 
     # ===========================
-    # PREDICTION VISUAL
+    # Prediction plot
     # ===========================
     st.subheader("🔮 Prediction vs Actual")
+
     fig_pred = go.Figure()
-    fig_pred.add_trace(go.Scatter(x=dates, y=y_true.flatten(), name="Actual"))
-    fig_pred.add_trace(go.Scatter(x=dates, y=y_pred.flatten(), name="Predicted"))
+    fig_pred.add_trace(go.Scatter(
+        x=dates,
+        y=y_true.flatten(),
+        mode="lines",
+        name="Actual"
+    ))
+    fig_pred.add_trace(go.Scatter(
+        x=dates,
+        y=y_pred.flatten(),
+        mode="lines",
+        name="Predicted"
+    ))
+
+    fig_pred.update_layout(
+        height=420,
+        legend=dict(orientation="h", y=1.02)
+    )
+
     st.plotly_chart(fig_pred, use_container_width=True)
 
     # ===========================
-    # METRICS
+    # Metrics
     # ===========================
     mae = np.mean(np.abs(y_true - y_pred))
     rmse = np.sqrt(np.mean((y_true - y_pred) ** 2))
@@ -199,7 +234,7 @@ if run_btn:
     c2.metric("RMSE", f"{rmse:.4f}")
 
     # ===========================
-    # DOWNLOADS (SAFE)
+    # Downloads
     # ===========================
     st.subheader("⬇️ Downloads")
 
@@ -234,6 +269,10 @@ if run_btn:
 
 else:
     st.info("Set parameters and click **Run Inference**.")
+
+# ---------------------------
+# Footer
+# ---------------------------
 st.markdown(
     """
     ---
