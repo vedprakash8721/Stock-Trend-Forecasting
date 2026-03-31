@@ -16,7 +16,7 @@ from keras.models import load_model
 # ---------------------------
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
 
-st.set_page_config(page_title="Stock Predictor (LSTM)", layout="wide")
+st.set_page_config(page_title="Stock Trend Forecasting ", layout="wide")
 
 # IMPORTANT: Fix hover & legend visibility
 pio.templates.default = "plotly_white"
@@ -25,6 +25,14 @@ pio.templates.default = "plotly_white"
 # Sidebar
 # ---------------------------
 st.sidebar.title("⚙️ Configuration")
+
+# ---------------------------
+# Mode Selection
+# ---------------------------
+mode = st.sidebar.radio(
+    "Select Mode",
+    ["📊 Market Guide", "Learning Mode"]
+)
 
 stock = st.sidebar.text_input(
     "Use standard US stock tickers (e.g., AAPL for Apple, MSFT for Microsoft, GOOG for Google, AMZN for Amazon, TSLA for Tesla, NVDA for NVIDIA,META for Meta,NFLX for Netflix,KO for Coca-Cola, etc.)",
@@ -53,7 +61,7 @@ run_btn = st.sidebar.button("🚀 Run Inference")
 # ---------------------------
 # Title
 # ---------------------------
-st.title("📈 Stock Price Prediction — LSTM")
+st.title("📈 Stock Trend Forecasting")
 st.caption("Market context + ML predictions + downloadable datasets")
 
 # ---------------------------
@@ -90,7 +98,7 @@ except Exception as e:
 # ---------------------------
 # Run app
 # ---------------------------
-if run_btn:
+if mode == "📊 Market Guide" and run_btn:
     df = fetch_data(stock, start, end)
 
     if df.empty:
@@ -119,6 +127,7 @@ if run_btn:
     # ===========================
     # Candlestick + EMA
     # ===========================
+    st.markdown("---")
     st.subheader("📉 Candlestick with EMAs")
 
     fig_candle = go.Figure()
@@ -200,7 +209,8 @@ if run_btn:
     # ===========================
     # Prediction plot
     # ===========================
-    st.subheader("🔮 Prediction vs Actual")
+    st.markdown("---")
+    st.subheader(" Prediction vs Actual")
 
     fig_pred = go.Figure()
     fig_pred.add_trace(go.Scatter(
@@ -232,11 +242,196 @@ if run_btn:
     c1, c2 = st.columns(2)
     c1.metric("MAE", f"{mae:.4f}")
     c2.metric("RMSE", f"{rmse:.4f}")
+    # ---------------------------
+    # Market Summary Cards
+    # ---------------------------
+    # Market Summary (Professional UI)
+    # ---------------------------
+    st.markdown("---")
+    st.subheader("📊 Market Summary")
 
+    current_price = df["Close"].iloc[-1]
+    predicted_price = y_pred[-1][0]
+    change_percent = ((predicted_price - current_price) / current_price) * 100
+
+    # Create container for clean grouping
+    with st.container():
+
+        col1, col2, col3 = st.columns(3)
+
+        # Current Price
+        with col1:
+            st.metric(
+                label="📍 Current Price",
+                value=f"₹{current_price:.2f}"
+            )
+
+        # Predicted Price with color change
+        with col2:
+            st.metric(
+                label="🔮 Predicted Price",
+                value=f"₹{predicted_price:.2f}",
+                delta=f"{change_percent:.2f}%"
+            )
+
+        # Market Direction
+        with col3:
+            if change_percent > 0:
+                st.success("📈 Bullish Trend")
+            elif change_percent < 0:
+                st.error("📉 Bearish Trend")
+            else:
+                st.warning("📊 Sideways Market")
+
+    # ---------------------------
+    # ---------------------------
+    # Trading Signal (Professional UI)
+    # ---------------------------
+    st.markdown("---")
+    st.subheader("📢 Trading Signal")
+
+    # Signal logic (keep yours if already defined)
+    if change_percent > 1:
+        signal = "BUY"
+    elif change_percent < -1:
+        signal = "SELL"
+    else:
+        signal = "HOLD"
+
+    # Center alignment using columns
+    left, center, right = st.columns([1, 2, 1])
+
+    with center:
+        if signal == "BUY":
+            st.success("🟢 BUY")
+        elif signal == "SELL":
+            st.error("🔴 SELL")
+        else:
+            st.warning("🟡 HOLD")
+
+    # ---------------------------
+    # Risk Level (Professional UI)
+    # ---------------------------
+    st.subheader("⚠️ Risk Level")
+
+    # Risk estimation
+    volatility = df["Close"].pct_change().std()
+
+    if volatility < 0.01:
+        risk = "LOW"
+    elif volatility < 0.02:
+        risk = "MEDIUM"
+    else:
+        risk = "HIGH"
+
+    # Center alignment (same style as signal)
+    left, center, right = st.columns([1, 2, 1])
+
+    with center:
+        if risk == "LOW":
+            st.success("🟢 LOW RISK")
+        elif risk == "MEDIUM":
+            st.warning("🟡 MEDIUM RISK")
+        else:
+            st.error("🔴 HIGH RISK")
+    # ---------------------------
+    # Explanation (WHY section)
+    # ---------------------------
+    st.markdown("---")
+    st.subheader(" Market Trend ")
+
+    # Signal explanation
+    if signal == "BUY":
+        st.success(
+            "📈 The model predicts price increase with positive momentum. "
+            "This indicates a potential buying opportunity."
+        )
+    elif signal == "SELL":
+        st.error(
+            "📉 The model predicts price decline. "
+            "Market may face downward pressure, suggesting caution or selling."
+        )
+    else:
+        st.warning(
+            "📊 The market is moving sideways with no strong trend. "
+            "Holding position is safer."
+        )
+
+    # Risk explanation
+    if risk == "HIGH":
+        st.info(
+            "⚠️ High volatility detected. Price may fluctuate rapidly, increasing risk."
+        )
+    elif risk == "MEDIUM":
+        st.info(
+            "⚠️ Moderate volatility. Some uncertainty exists in price movement."
+        )
+    else:
+        st.info(
+            "✅ Low volatility. Market conditions are relatively stable."
+        )
+    # ---------------------------
+    # ---------------------------
+    # Smart AI Insights (Upgraded)
+    # ---------------------------
+    st.markdown("---")
+    st.subheader(" AI Insights")
+
+    col1, col2 = st.columns(2)
+
+    # ---------------- LEFT: Market Behavior ----------------
+    with col1:
+        st.markdown("### 📊 Market Behavior")
+
+        if change_percent > 1:
+            st.success("📈 Strong bullish momentum detected")
+        elif change_percent < -1:
+            st.error("📉 Strong bearish pressure detected")
+        else:
+            st.warning("📊 Sideways movement (low momentum)")
+
+        st.caption(f"Predicted change: {change_percent:.2f}%")
+
+    # ---------------- RIGHT: Volatility Insight ----------------
+    with col2:
+        st.markdown("### ⚠️ Volatility Analysis")
+
+        if volatility > 0.02:
+            st.error("High volatility → Risky environment")
+        elif volatility > 0.01:
+            st.warning("Moderate volatility → Uncertain market")
+        else:
+            st.success("Low volatility → Stable conditions")
+
+    # ---------------- EXPANDABLE PRO INSIGHT ----------------
+    with st.expander("📌 Detailed AI Explanation"):
+        
+        if signal == "BUY":
+            st.write(
+                "The model identifies upward trend supported by price movement and momentum. "
+                "Combined with current conditions, this suggests a potential buying opportunity."
+            )
+        elif signal == "SELL":
+            st.write(
+                "The model detects weakening price trend. "
+                "Market may experience downward correction or selling pressure."
+            )
+        else:
+            st.write(
+                "The model does not detect a strong directional trend. "
+                "Market is likely consolidating."
+            )
+
+        st.write(
+            "Volatility analysis is used to estimate risk. "
+            "Higher volatility indicates unpredictable price swings."
+        )
+        
     # ===========================
     # Downloads
     # ===========================
-    st.subheader("⬇️ Downloads")
+    st.markdown("---")
+    st.subheader(" Downloads")
 
     st.download_button(
         "⬇️ Download Full Raw Data (CSV)",
@@ -265,11 +460,17 @@ if run_btn:
         mime="text/html"
     )
 
-    st.success("Inference complete.")
+    st.success("✅ Analysis complete. Review market summary and insights above.")
 
-else:
+elif mode == "📊 Market Guide":
     st.info("Set parameters and click **Run Inference**.")
 
+# ---------------------------
+# Learning Mode
+# ---------------------------
+if mode == "📘 Learning Mode":
+    st.title("📘 Stock Market Learning Hub")
+    st.info("Select a topic from below to start learning.")
 # ---------------------------
 # Footer
 # ---------------------------
